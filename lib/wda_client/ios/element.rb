@@ -4,10 +4,19 @@ require 'selenium-webdriver'
 module WdaClient
   module Ios
     DELAY_TIME = 3
-
+    def self.handle_request_data(from_x,from_y,to_x,to_y,duration)
+      opt = Hash.new
+      opt[:fromX] = from_x.to_f
+      opt[:fromY] = from_y.to_f
+      opt[:toX] = to_x.to_f
+      opt[:toY] = to_y.to_f
+      opt[:duration] = duration
+      return opt
+    end
     def search_element(opt)
       fail 'the request params opt can not be empty' if opt == {}
       template = WdaClient.element_template_operate(opt)
+      # p template.to_json
       # try 2 times to request search api
       for i in 0..1
         element= agent_post(@session_url+'/element/',template.to_json)
@@ -21,6 +30,7 @@ module WdaClient
           sleep DELAY_TIME
         end
       end
+
       # catch exception
       # p element
       fail 'request search element api failed' if element==nil
@@ -65,12 +75,13 @@ module WdaClient
 =end
     end
 
+
     # get text of element
     # button or staticText =>label
     # other =>text
     def handle_get_text(opt)
       # get element
-      find_element(opt)
+      search_element(opt)
 
       url = @session_url + "/element/#{@element_id}/text"
       text = agent_get(url)
@@ -78,14 +89,33 @@ module WdaClient
       return text['value']
     end
 
-    # def get_attribute(arg)
-    #   attribute = ['name','rect', 'size', 'location'] # 'enabled',, 'text', 'displayed', 'accessible'
-    #   resp=Hash.new
-    #   (attribute&arg).each do |attr|
-    #     json =agent_get(@session_url + "/element/#{@element_id}/"+attr)
-    #     resp[attr.to_sym]=json['']
-    #   end
-    # end
+    # location drag
+    def handle_drag(from_x,from_y,to_x,to_y,duration)
+      request = WdaClient::Ios.handle_request_data(from_x,from_y,to_x,to_y,duration)
+      # operate
+      # p request.to_json
+      drag = agent_post(@session_url+'/uiaTarget/dragfromtoforduration/',request.to_json)
+      delay_while(0.3)
+      fail 'handle_drag:102 : page draging failed' unless drag['status']==0
+    end
+
+    # use Coordinate to click
+    # element==nil stand for coordinate start (0,0)
+    # or take element as the center
+    def handle_tap(x,y,element)
+      req={x: x, y: y}
+      # p req.to_json
+      tap = agent_post(@session_url+"/tap/#{element}",req.to_json)
+      # p tap
+      fail 'handle_tap:113 : tap failed' unless tap['status']==0
+      return tap
+
+    end
+
+    # take element to another coordinate
+    def handle_scroll(opt)
+
+    end
 
   end
 end
