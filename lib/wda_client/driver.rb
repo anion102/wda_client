@@ -2,7 +2,11 @@
 # author: anion
 
 require_relative 'agent/request'
+
 require_relative 'ios/element'
+require_relative 'ios/alert'
+require_relative 'ios/window'
+
 require_relative 'logger_out'
 
 module WdaClient
@@ -25,7 +29,7 @@ module WdaClient
         template[:using] = 'partial link text'
         template[:value] = "value = #{value}"
       else
-        fail 'the attribute do not be supported to locate ios'
+        fail 'the attribute do not be supported to locate element'
       end
 
     end
@@ -46,19 +50,19 @@ module WdaClient
     attr_reader :session_url
     attr_reader :element_id
     attr_reader :element_url
+    attr_reader :alert
 
     #init to  WebDriverAgent runing succeed or not
     def initialize(server_url)
       #example http://192.168.2.97:8100
       fail 'server url do not find' if server_url==''||server_url==nil
-      @timeout = 10
+      @timeout = 30
       @duration=3
       @server_url = server_url
       # get /status
       agent = agent_get(@server_url+'/status')
-
       fail 'WebDriver Agent running failed or server_url is wrong' if agent==nil
-      fail 'WebDriver Agent running failed' if agent['status']!=0 || agent['sessionId']==0
+      fail "WebDriver Agent running failed: #{agent}" if agent['status']!=0 || agent['sessionId']==0
       # Initialize log module
       @logger =WdaClient::LoggerOut.logger
       @logger.info_log('wda_client::driver.init',"connect WebDriverAgent succeed\n")
@@ -68,7 +72,7 @@ module WdaClient
     end
 
     def start_device(opt={})
-      p opt
+
       fail 'opt must be a hash' unless opt.is_a? Hash
 
       app_info = opt[:desiredCapabilities]||{}
@@ -80,8 +84,6 @@ module WdaClient
         @logger.info_log('wda_client::driver.start_device',"app launch failed\n")
         fail 'app launch failed'
       end
-
-
       #app which tested infos
       @device = start_resp['value']['capabilities']['device']
       @browser_name = start_resp['value']['capabilities']['browserName']
@@ -91,15 +93,11 @@ module WdaClient
       #example http://192.168.2.97:8100/session
       @session_url = @server_url+'/session/'+@session
       @logger.info_log('wda_client::driver.start_device',"the app launched successfully\n")
-    end
 
-
-    def deactivate_app(duration)
-      opt={duration:duration}.to_json
-      data=agent_post(@session_url+'/deactivateApp',opt)
-      p "deactivate_app: #{data}"
+      start_alert_handle(app_info[:autoAcceptAlerts])
 
     end
+
 
     # using: key     =>'name'  'xpath' 'class'
     # value: value   => '登录'
@@ -108,15 +106,15 @@ module WdaClient
     #   value: value
     # }
     def find_element(opt = {})
-      # get ios id
-      fail 'find no ios by {}' if opt == {}
+      # get element id
+      fail 'find no element by {}' if opt == {}
       search_element(opt)
       #set element_url
       self
     end
 
 
-    # operate: click ios on page
+    # operate: click element on page
     def click_element(opt = {})
       find_element(opt) if opt != {}
       # click @element_id
@@ -133,11 +131,11 @@ module WdaClient
       }
       url=@element_url + '/value'
       set = agent_post(url,opt.to_json)
-      fail 'input for ios failed' unless set['status'] == 0
+      fail 'input for element failed' unless set['status'] == 0
       return set
     end
 
-    # operate: clear ios value on page
+    # operate: clear element value on page
     def handle_clear(opt = {})
       find_element(opt) if opt != {}
       # clear the value of @element_id
@@ -146,19 +144,33 @@ module WdaClient
       return clear
     end
 
-    # wait ios to find click so
+    # wait element to find click so
     def wait_element(opt = {},time = @timeout)
       begin
         wait = Selenium::WebDriver::Wait.new(:timeout => time)
         wait.until {
           search_element(opt).length.equal?(36)
         }
-        @logger.info_log('wda_client::driver wait_element',"waiting for ios with #{opt.values } succeed\n")
+        @logger.info_log('wda_client::driver wait_element',"waiting for element with #{opt.values } succeed\n")
         return true
       rescue
-        @logger.error_log('wda_client::driver wait_element',"waiting for ios with #{opt.values } failed\n")
+        @logger.error_log('wda_client::driver wait_element',"waiting for element with #{opt.values } failed\n")
         return false
       end
+    end
+
+
+    def deactivate_app(duration)
+      opt={duration:duration}.to_json
+      data=agent_post(@session_url+'/deactivateApp',opt)
+      p "deactivate_app: #{data}"
+
+    end
+
+    def handle_homescreen
+      res = agent_post(@server_url+'/homescreen','')
+      p res
+      return res
     end
 
   end
